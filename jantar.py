@@ -2,62 +2,64 @@ from random import uniform
 from time import sleep
 from threading import Thread, Lock
 
-pratos = [0, 0, 0, 0, 0]  # 0 = Não comeu, 1 = Já comeu
-
+# Configurações
+LIMITE_REFEICOES = 3  # Quantas vezes cada um deve comer
+pratos = [0, 0, 0, 0, 0] 
+nomes = ['Aristóteles', 'Platão', 'Sócrates', 'Pitágoras', 'Demócrito']
 
 class Filosofo(Thread):
-    execute = True  # variável para realizar a execução
-
-    def __init__(self, nome, garfo_esquerda, garfo_direita):  # Construtor da classe Filosofo
+    def __init__(self, id, nome, garfo_esquerda, garfo_direita):
         Thread.__init__(self)
+        self.id = id
         self.nome = nome
         self.garfo_esquerda = garfo_esquerda
         self.garfo_direita = garfo_direita
 
     def run(self):
-        """ Sobrescrita de Thread, a função run definirá o que irá acontecer após chamar o método start() na
-        instância criada. """
-        while self.execute:
-            print(f"\n {self.nome} está pensando")
-            sleep(uniform(5, 15))
-            self.comer()
+        # O filósofo tentará comer até atingir o limite definido
+        while pratos[self.id] < LIMITE_REFEICOES:
+            print(f"\n[Pensando] {self.nome} está refletindo sobre o universo...")
+            sleep(uniform(1, 3)) # Reduzi o tempo para o teste ser mais rápido
+            self.tentar_comer()
+        
+        print(f"\n--- {self.nome} está satisfeito e saiu da mesa. ---")
 
-    def comer(self):
-        """
-        Pega o garfo 1 e tenta pegar o garfo 2. Se o garfo 2 estiver livre,
-        o ele janta e solta os dois garfos em seguida,senão ele desiste de
-        comer e continua pensando.
-        """
-        garfo1, garfo2 = self.garfo_esquerda, self.garfo_direita
+    def tentar_comer(self):
+        g1, g2 = self.garfo_esquerda, self.garfo_direita
 
-        while self.execute:  # enquanto tiver executando
-            garfo1.acquire(True)  # tenta pegar o primeiro garfo
-            locked = garfo2.acquire(False)  # verifica se o segundo garfo está livre
-            if locked:
-                break
-            garfo1.release()  # libera o garfo1
+        # Tenta pegar os garfos
+        g1.acquire()
+        locked = g2.acquire(False) # False para não travar se o garfo estiver ocupado
+
+        if locked:
+            # Conseguiu os dois garfos
+            print(f"\n  [Comendo] {self.nome} pegou os dois garfos.")
+            sleep(uniform(1, 2))
+            
+            pratos[self.id] += 1
+            print(f"  [Status] Pratos consumidos: {pratos}")
+            
+            g2.release()
+            g1.release()
+            print(f"\n[Terminou] {self.nome} soltou os garfos.")
         else:
-            return  # volta a pensar
+            # Não conseguiu o segundo, solta o primeiro para evitar Deadlock
+            g1.release()
+            print(f"\n  [Desistência] {self.nome} não conseguiu o segundo garfo e voltou a pensar.")
 
-        print(f"\n {self.nome} começou a comer")
-        sleep(uniform(5, 10))
-        print(f"\n {self.nome} parou de comer")
-        pratos[nomes.index(self.nome)] += 1  # contabiliza o número de vezes que cada filosofo comeu
-        print(pratos)
-        garfo1.release()  # libera o garfo1
-        garfo2.release()  # libera o garfo2
-
-
-nomes = ['Aristóteles', 'Platão', 'Sócrates', 'Pitágoras', 'Demócrito']  # Nomes dos filósofos
+# Inicialização
 garfos = [Lock() for _ in range(5)]
-mesa = [Filosofo(nomes[i], garfos[i % 5], garfos[(i + 1) % 5]) for i in range(5)]
-for _ in range(50):
-    Filosofo.execute = True  # Inicia a execução
-    for filosofo in mesa:
-        try:
-            filosofo.start()  # inicia o objeto de thread criado.
-            sleep(2)
-        except RuntimeError:  # Se a thread já tiver sido iniciada
-            pass
-    sleep(uniform(5, 15))
-    Filosofo.execute = False  # Para a execução
+mesa = [Filosofo(i, nomes[i], garfos[i], garfos[(i + 1) % 5]) for i in range(5)]
+
+# Inicia todos os filósofos uma única vez
+for filosofo in mesa:
+    filosofo.start()
+
+# Aguarda todos terminarem para encerrar o programa principal
+for filosofo in mesa:
+    filosofo.join()
+
+print("\n" + "="*30)
+print("A refeição acabou! Todos estão satisfeitos.")
+print(f"Resultado final: {pratos}")
+print("="*30)
